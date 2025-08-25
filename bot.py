@@ -1,63 +1,55 @@
 import os
-
-
-import requests
+import logging
 from flask import Flask, request, jsonify
+import requests
 
+# הגדרות בסיסיות
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# --- ENV (ברנדר) ---
-TOKEN = os.getenv("TOKEN")  # שמור את הטוקן כ־Environment Variable
-API = f"https://api.telegram.org/bot{TOKEN}/"
+# משתנים מהסביבה
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+RENDER_URL = os.getenv("RENDER_URL")  # לדוגמה: https://your-app.onrender.com
+CHAT_ID = os.getenv("CHAT_ID")  # אפשר לשים קבוע אם רוצים לשלוח רק אליך
 
-# --- Helpers ---
-def send_text(chat_id: str, text: str):
-    if not TOKEN:
-        return {"ok": False, "error": "TOKEN is missing"}
-    try:
-        r = requests.post(
-            API + "sendMessage",
-            data={"chat_id": chat_id, "text": text},
-            timeout=10
-        )
-        return r.json()
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+# כתובת API של טלגרם
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# --- Routes ---
-@app.get("/")
+
+@app.route("/")
 def home():
-    return "Bot is running ✅"
+    return "Bot is running!", 200
 
-@app.post("/webhook")
+
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    if not TOKEN:
-        return {"ok": False, "error": "TOKEN is missing"}, 400
+    try:
+        data = request.get_json()
+        logging.info(f"Incoming update: {data}")
 
-    update = request.get_json(silent=True) or {}
+        if "message" in data and "text" in data["message"]:
+            chat_id = data["message"]["chat"]["id"]
+            text = data["message"]["text"]
 
-    # הודעת טקסט רגילה
-    msg = update.get("message") or update.get("edited_message")
-    if msg and "text" in msg:
-        chat_id = msg["chat"]["id"]
-        text = msg["text"].strip()
+            # תגובה פשוטה
+            reply = f"📩 קיבלתי: {text}"
+            send_message(chat_id, reply)
 
-        if text.lower() in ("/start", "start"):
-            send_text(chat_id, "הבוט מחובר! ✅ שלח הודעה לבדיקה.")
-        else:
-            send_text(chat_id, f"אמרת: {text}")
+        return jsonify({"status": "ok"}), 200
 
-        return {"ok": True}, 200
+    except Exception as e:
+        logging.error(f"Error in webhook: {e}")
+        return jsonify({"status": "error"}), 500
 
-    # Callback של כפתורים
-    cq = update.get("callback_query")
-    if cq:
-        chat_id = cq["message"]["chat"]["id"]
-        data = cq.get("data", "")
-        send_text(chat_id, f"נלחץ: {data}")
-        return {"ok": True}, 200
 
-    return {"ok": True}, 200
+def send_message(chat_id, text):
+    """שליחת הודעה חזרה לטלגרם"""
+    url = f"{TELEGRAM_API_URL}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    response = requests.post(url, json=payload)
+    logging.info(f"Message sent: {response.text}")
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
