@@ -3,37 +3,54 @@ import logging
 import requests
 from flask import Flask, request, jsonify
 
-# ======== Config ========
+# ========= Config =========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-PUBLIC_URL = os.environ.get("PUBLIC_URL")  # למשל https://amir-trading-bot.onrender.com
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "amir-secret")
-
 if not TOKEN:
     raise RuntimeError("Missing TELEGRAM_TOKEN environment variable")
 
 TG_API = f"https://api.telegram.org/bot{TOKEN}"
 
-# ======== App ========
+# ========= App =========
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok"})
 
-@app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running ✅"
+
+
+@app.route("/webhook", methods=["POST"])
 def webhook():
     update = request.get_json()
     logging.info(f"Incoming update: {update}")
+
+    # אין הודעה? מחזירים OK לטלגרם
     if not update or "message" not in update:
-        return jsonify({"ok": True})
+        return jsonify(ok=True)
 
-    chat_id = update["message"]["chat"]["id"]
-    text = update["message"].get("text", "")
-    reply = f"✅ קיבלתי: {text}"
-    requests.post(f"{TG_API}/sendMessage", json={"chat_id": chat_id, "text": reply})
-    return jsonify({"ok": True})
+    message = update["message"]
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
 
-# ======== Startup ========
+    # לוגיקה פשוטה לבדיקות
+    if text == "/start":
+        reply = "הבוט פעיל ✅"
+    elif text == "/ping":
+        reply = "PONG ✅"
+    else:
+        reply = f"✅ קיבלתי: {text}"
+
+    # שליחת תשובה לטלגרם
+    requests.post(
+        f"{TG_API}/sendMessage",
+        json={"chat_id": chat_id, "text": reply}
+    )
+
+    return jsonify(ok=True)
+
+
+# ========= Local run (Render משתמש בזה גם דרך gunicorn) =========
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
