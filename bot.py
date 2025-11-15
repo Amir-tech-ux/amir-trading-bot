@@ -3,21 +3,25 @@ import logging
 import requests
 from flask import Flask, request, jsonify
 
-# ======== Config ========
+# ========= Config =========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
+if not TOKEN:
+    raise RuntimeError("Missing TELEGRAM_TOKEN environment variable")
+
 TG_API = f"https://api.telegram.org/bot{TOKEN}"
 
-# ======== App ========
+# ========= App =========
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# ======== Webhook ========
+
+# ========= Webhook =========
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = request.get_json()
     logging.info(f"Incoming update: {update}")
 
-    # אם אין הודעה — לצאת
+    # אם אין הודעה – לצאת
     if not update or "message" not in update:
         return jsonify({"ok": True})
 
@@ -25,7 +29,7 @@ def webhook():
     text = update["message"].get("text", "")
 
     # תשובה
-    reply = f"✔️ קיבלתי: {text}"
+    reply = "קיבלתי ✔️: " + text
 
     # שליחת ההודעה חזרה
     requests.post(
@@ -36,6 +40,6 @@ def webhook():
     return jsonify({"ok": True})
 
 
-# ======== Startup ========
+# ========= Startup =========
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
